@@ -1,4 +1,4 @@
-$logs = get-winevent -Path .\Security.evtx
+$logs = get-winevent -Path z:\temp\Security1.evtx
 write-host "[*] Initial Logs Ingestion completed - " + $logs.count " - ingested."
 write-host "[*] Analyzing failed and successful logins."
 
@@ -37,16 +37,23 @@ foreach ($log in $logs)
 $bruteIPsDenied = $ipsDenied.srcIP | Group-Object | where {$_.count -gt 3 } | select -ExpandProperty name 
 $dedupAllowIP = $ipsAllowed.srcIP | Sort-Object -Unique
 
-$comp = ((Compare-Object -ReferenceObject $bruteIPsDenied -DifferenceObject $dedupAllowIP -IncludeEqual).Where({$_.SideIndicator -eq "=="})).InputObject 
-
-if ($comp -eq $null)
-{
-    write-host "No indication of unauthorized successful login found."
+if ([string]::IsNullOrEmpty($dedupAllowIP)){
+    Write-Output 'No RDP login events are available in log.'
+    exit
 }
-else
-{
+elseif ([string]::IsNullOrEmpty($bruteIPsDenied)){
+    Write-Output 'No RDP denied logins were found in log.'
+    exit
+}
+
+$comp = ((Compare-Object -ReferenceObject $bruteIPsDenied -DifferenceObject $dedupAllowIP -IncludeEqual).Where({$_.SideIndicator -eq "=="})).InputObject
+
+if ([string]::IsNullOrEmpty($comp)){
+    write-host "No indication of unauthorized successful login found."
+    exit
+}
+else{
     write-host "[*] Found as a brute force attacker that successfully logged in"
     "Allowed Events: $ipsDenied.where($_.srcIP -eq $comp)"
     "Denied Events: $ipsAllowed.where($_.srcIP -eq $comp)"
-
 }
